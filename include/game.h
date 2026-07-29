@@ -11,6 +11,7 @@
 #include "soundprop.h"
 #include "enemy.h"
 #include "map.h"
+#include "achievements.h"
 
 /*
  * Echo Protocol - core game module.
@@ -270,6 +271,22 @@ typedef struct Game {
     /* Fade transition. */
     float fadeAlpha;
     float fadeTarget;
+
+    /* --- Achievement System --- */
+    AchievementSystem achievements;
+
+    /* Run-specific tracking for achievement detection. */
+    int   runVisitedRoomCount;
+    bool  runVisitedRooms[48];   /* track which rooms visited this run */
+    bool  runHadNearMiss;        /* true if near miss occurred this run */
+    bool  runHadResonance;       /* true if mysterious echo response */
+    bool  runHadEchoGhost;       /* true if ghost event triggered */
+    bool  runHadShadow;          /* true if shadow event triggered */
+    bool  runHadRadioBurst;      /* true if radio burst played */
+    bool  runHadLoreTerminal;    /* true if lore log was displayed */
+    bool  runHadFalseRelay;      /* true if false relay signal appeared */
+    bool  runHadHunterMimic;     /* true if hunter mimic ping occurred */
+    bool  runEscapeAchieved;     /* true if player successfully escaped */
 } Game;
 
 void GameInit(Game *game);

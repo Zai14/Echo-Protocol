@@ -62,6 +62,7 @@ set(ECHO_SOURCES
     src/echomemory.c
     src/soundprop.c
     src/audio.c
+    src/achievements.c
 )
 
 add_executable(EchoProtocol ${ECHO_SOURCES})

@@ -354,6 +354,22 @@ void GameInit(Game *game)
     game->firstPingDone = false;
     game->firstPingTime = 0.0f;
 
+    /* Initialise persistent achievement system (loads saved data). */
+    AchievementInit(&game->achievements);
+
+    /* Reset run-specific tracking. */
+    memset(game->runVisitedRooms, 0, sizeof(game->runVisitedRooms));
+    game->runVisitedRoomCount  = 0;
+    game->runHadNearMiss       = false;
+    game->runHadResonance      = false;
+    game->runHadEchoGhost      = false;
+    game->runHadShadow         = false;
+    game->runHadRadioBurst     = false;
+    game->runHadLoreTerminal   = false;
+    game->runHadFalseRelay     = false;
+    game->runHadHunterMimic    = false;
+    game->runEscapeAchieved    = false;
+
     /* Stay in GAME_STATE_BOOT for the title screen. */
     /* Transitions to PLAYING after titleTimer expires. */
 }
@@ -590,6 +606,26 @@ void GameRestart(Game *game)
     game->renderer.sonarFlash = 0.0f;
     game->renderer.sonarPulseCount = 0;
 
+    /* Reset run-specific tracking. */
+    memset(game->runVisitedRooms, 0, sizeof(game->runVisitedRooms));
+    game->runVisitedRoomCount  = 0;
+    game->runHadNearMiss       = false;
+    game->runHadResonance      = false;
+    game->runHadEchoGhost      = false;
+    game->runHadShadow         = false;
+    game->runHadRadioBurst     = false;
+    game->runHadLoreTerminal   = false;
+    game->runHadFalseRelay     = false;
+    game->runHadHunterMimic    = false;
+    game->runEscapeAchieved    = false;
+
+    /* Track total attempts for FACILITY VETERAN achievement. */
+    game->achievements.lifetimeAttempts++;
+    AchievementSave(&game->achievements);
+    if (game->achievements.lifetimeAttempts >= 3) {
+        AchievementUnlock(&game->achievements, ACH_FACILITY_VET, game->elapsedTime);
+    }
+
     game->state = GAME_STATE_BOOT;
 }
 
@@ -679,13 +715,26 @@ void GameUpdate(Game *game)
         if (GetRandomValue(0, 49) == 0) {
             pulseX += (float)(GetRandomValue(2, 6)) * ((GetRandomValue(0, 1) ? 1.0f : -1.0f));
             pulseY += (float)(GetRandomValue(2, 6)) * ((GetRandomValue(0, 1) ? 1.0f : -1.0f));
+        }            SonarEmitPulse(&game->sonar, pulseX, pulseY);
+
+        /* Achievement: first ping. */
+        if (wasFirstPing) {
+            AchievementUnlock(&game->achievements, ACH_FIRST_PING, game->elapsedTime);
+            /* Achievement: "ANOMALY DETECTED" — check seed at game start. */
+            if (game->anomalySeed) {
+                AchievementUnlock(&game->achievements, ACH_ANOMALY, game->elapsedTime);
+            }
         }
-        SonarEmitPulse(&game->sonar, pulseX, pulseY);
 
         /* #20: Rare Event — 1% chance the ping gets a mysterious response.
          * Another sonar pulse echoes back from a random room centre.
          * No explanation. No enemy shown. Just... a response. */
         if (GetRandomValue(0, 99) == 0 && game->station.roomCount > 1) {
+            /* Achievement: "Something Answered" — mysterious echo response. */
+            if (!game->runHadResonance) {
+                game->runHadResonance = true;
+                AchievementUnlock(&game->achievements, ACH_RESONANCE, game->elapsedTime);
+            }
             int ri = GetRandomValue(0, game->station.roomCount - 1);
             float mx = game->station.rooms[ri].x + game->station.rooms[ri].w * 0.5f;
             float my = game->station.rooms[ri].y + game->station.rooms[ri].h * 0.5f;
@@ -847,6 +896,11 @@ void GameUpdate(Game *game)
         game->hunterMimicTimer -= game->deltaTime;
         if (game->hunterMimicTimer <= 0.0f && game->enemies.count > 0) {
             game->hunterMimicTimer = 0.0f;
+            /* Achievement: "Deceived" — experience hunter mimic ping. */
+            if (!game->runHadHunterMimic) {
+                game->runHadHunterMimic = true;
+                AchievementUnlock(&game->achievements, ACH_HUNTER_MIMIC, game->elapsedTime);
+            }
             /* Emit a fake sonar pulse from the Hunter's position. */
             for (int hi = 0; hi < game->enemies.count; hi++) {
                 const Enemy *he = &game->enemies.enemies[hi];
@@ -930,6 +984,12 @@ void GameUpdate(Game *game)
             if (newRoom != game->currentRoomIdx && newRoom >= 0) {
                 game->currentRoomIdx = newRoom;
                 game->roomNameTimer = 3.0f;
+                /* Track visited rooms for Cartographer achievement. */
+                if (newRoom < (int)(sizeof(game->runVisitedRooms) / sizeof(game->runVisitedRooms[0])) &&
+                    !game->runVisitedRooms[newRoom]) {
+                    game->runVisitedRooms[newRoom] = true;
+                    game->runVisitedRoomCount++;
+                }
                 static const char *ROOM_PREFIXES[] = {
                     "SECTOR A-", "SECTOR B-", "SECTOR C-", "SECTOR D-", "SECTOR E-"
                 };
@@ -1142,6 +1202,11 @@ void GameUpdate(Game *game)
             game->ghostReplayY = game->lastPingPositionsY[0]
                                + (float)GetRandomValue(-200, 200);
             game->ghostTimer = 8.0f + (float)GetRandomValue(0, 60) / 10.0f; /* 8-14s */
+            /* Achievement: "Echoes of the Past" — trigger echo ghost. */
+            if (!game->runHadEchoGhost) {
+                game->runHadEchoGhost = true;
+                AchievementUnlock(&game->achievements, ACH_ECHO_GHOST, game->elapsedTime);
+            }
         }
     }
 
@@ -1154,6 +1219,11 @@ void GameUpdate(Game *game)
             game->shadowX = GetScreenWidth() / 2.0f + cosf(angle) * dist;
             game->shadowY = GetScreenHeight() / 2.0f + sinf(angle) * dist;
             game->shadowTimer = 12.0f + (float)GetRandomValue(0, 60) / 10.0f;
+            /* Achievement: "Peripheral Vision" — see a fleeting shadow. */
+            if (!game->runHadShadow) {
+                game->runHadShadow = true;
+                AchievementUnlock(&game->achievements, ACH_SHADOW_WATCHER, game->elapsedTime);
+            }
         }
     }
 
@@ -1186,6 +1256,11 @@ void GameUpdate(Game *game)
                 game->radioText[sizeof(game->radioText) - 1] = '\0';
                 game->radioDisplay = 2.0f;
                 game->radioTimer = 35.0f + (float)GetRandomValue(0, 50) / 10.0f; /* 35-40s */
+                /* Achievement: "Last Transmission" — hear a radio burst. */
+                if (!game->runHadRadioBurst) {
+                    game->runHadRadioBurst = true;
+                    AchievementUnlock(&game->achievements, ACH_RADIO_BURST, game->elapsedTime);
+                }
             }
         }
     }
@@ -1230,6 +1305,11 @@ void GameUpdate(Game *game)
                 strncpy(game->logText, LORE_LOGS[logIdx], sizeof(game->logText) - 1);
                 game->logText[sizeof(game->logText) - 1] = '\0';
                 game->logDisplayTimer = 4.0f;
+                /* Achievement: Lore Keeper — found a terminal with station lore. */
+                if (!game->runHadLoreTerminal) {
+                    game->runHadLoreTerminal = true;
+                    AchievementUnlock(&game->achievements, ACH_LORE_KEEPER, game->elapsedTime);
+                }
                 break;
             }
         }
@@ -1667,6 +1747,11 @@ void GameUpdate(Game *game)
                     game->renderer.sonarFlash = 0.6f;
                     /* Near miss heartbeat thump (use existing audio system). */
                     game->nearestEnemyDist = 0.0f; /* triggers immediate heartbeat */
+                    /* Achievement: "Barely Breathing" — survive a near miss. */
+                    if (!game->runHadNearMiss) {
+                        game->runHadNearMiss = true;
+                        AchievementUnlock(&game->achievements, ACH_DEATHS_DOOR, game->elapsedTime);
+                    }
                     break;
                 }
             }
@@ -1692,6 +1777,22 @@ void GameUpdate(Game *game)
             strcpy(game->lastOutcome, "Lost Contact");
             /* #10: Last Heartbeat — one final thump after death. */
             game->nearestEnemyDist = 0.0f;
+
+            /* --- Death-related achievements --- */
+            game->achievements.lifetimeDeaths++;
+            AchievementSave(&game->achievements);
+            /* ACH_FINAL_ECHO: "First Contact" — die for the first time. */
+            if (game->achievements.lifetimeDeaths == 1) {
+                AchievementUnlock(&game->achievements, ACH_FINAL_ECHO, game->elapsedTime);
+            }
+            /* ACH_PERSISTENT: "Persistent Signal" — die 5 times. */
+            if (game->achievements.lifetimeDeaths >= 5) {
+                AchievementUnlock(&game->achievements, ACH_PERSISTENT, game->elapsedTime);
+            }
+            /* ACH_MASOCHIST: "Unbroken" — die 10 times. */
+            if (game->achievements.lifetimeDeaths >= 10) {
+                AchievementUnlock(&game->achievements, ACH_MASOCHIST, game->elapsedTime);
+            }
         }
         /* Decay the shader flash during slow-mo. */
         if (game->renderer.sonarFlash > 0.0f) {
@@ -1821,9 +1922,48 @@ void GameUpdate(Game *game)
                 game->gameWon         = true;
                 game->state           = GAME_STATE_WON;
                 strcpy(game->lastOutcome, "Recovered");
+                
+                /* --- Escaped! Unlock escape-related achievements. --- */
+                game->runEscapeAchieved = true;
+                game->achievements.lifetimeEscapes++;
+                AchievementSave(&game->achievements);
+                
+                /* ACH_ESCAPED: "Last Light" — successfully escape. */
+                AchievementUnlock(&game->achievements, ACH_ESCAPED, game->elapsedTime);
+                
+                /* ACH_ECHOLESS: "Ω ECHOLESS" — 0 alerts. */
+                if (game->alertsTriggered == 0) {
+                    AchievementUnlock(&game->achievements, ACH_ECHOLESS, game->elapsedTime);
+                }
+                
+                /* ACH_SILENT_RUN: "Ghost Protocol" — 0 alerts when escaping. */
+                if (game->alertsTriggered == 0) {
+                    AchievementUnlock(&game->achievements, ACH_SILENT_RUN, game->elapsedTime);
+                }
+                
+                /* ACH_SPEED_DEMON: "Speed of Dark" — escape in < 2 min. */
+                if (game->runTimeDisplay < 120.0f) {
+                    AchievementUnlock(&game->achievements, ACH_SPEED_DEMON, game->elapsedTime);
+                }
             }
         }
     }
+
+    /* --- Achievement detection during gameplay --- */
+    if (game->state == GAME_STATE_PLAYING) {
+        /* ACH_TRIGGER_HAPPY: "Resonance Cascade" — 20+ pings one run. */
+        if (game->scansUsed >= 20) {
+            AchievementUnlock(&game->achievements, ACH_TRIGGER_HAPPY, game->elapsedTime);
+        }
+
+        /* ACH_EXPLORER: "Cartographer" — visit every room. */
+        if (game->runVisitedRoomCount >= game->station.roomCount) {
+            AchievementUnlock(&game->achievements, ACH_EXPLORER, game->elapsedTime);
+        }
+    }
+
+    /* --- Update achievement popup animation --- */
+    AchievementUpdatePopup(&game->achievements, game->deltaTime);
 }
 
 void GameDraw(Game *game)
@@ -2154,6 +2294,11 @@ void GameDraw(Game *game)
                 }
                 if (nrcCount > 0) {
                     game->falseRelayRoomIdx = nonRelayCandidates[GetRandomValue(0, nrcCount - 1)];
+                    /* Achievement: "False Signal" — follow a ghost relay. */
+                    if (!game->runHadFalseRelay) {
+                        game->runHadFalseRelay = true;
+                        AchievementUnlock(&game->achievements, ACH_FALSE_RELAY, game->elapsedTime);
+                    }
                 }
                 game->falseRelayTimer = 0.8f;
             }
@@ -3045,6 +3190,9 @@ void GameDraw(Game *game)
                       Fade(BLACK, powerDark));
     }
 
+    /* --- Achievement popup notification --- */
+    AchievementDrawPopup(&game->achievements);
+
     /* --- Fade overlay --- */
     if (game->fadeAlpha > 0.005f)
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
@@ -3059,6 +3207,7 @@ void GameShutdown(Game *game)
     PlayerShutdown(&game->player);
     SonarShutdown(&game->sonar);
     EnemyManagerShutdown(&game->enemies);
+    AchievementSave(&game->achievements);
     game->isRunning = false;
     game->state     = GAME_STATE_EXIT;
 }
