@@ -55,7 +55,9 @@ START → Find the relay room → Activate the console → Airlock unlocks → R
 | **W A S D** | Move |
 | **SPACE** | Emit sonar pulse (reveal surroundings — alerts enemies) |
 | **E** | Activate relay console (hold for 2 seconds near relay room) |
-| **ESC** | Exit game |
+| **TAB** | Open/close achievements menu (during gameplay or game-over) |
+| **X** | Reset all achievements (two-step confirmation, from achievements menu) |
+| **ESC** | Exit game (or close achievements menu if open) |
 | **R** | Restart (from Game Over or Victory screen) |
 
 ---
@@ -255,6 +257,7 @@ soundprop.c     → Sound event propagation, spatial queries
 collision.c     → Circle-circle, circle-rect primitives
 procedural.c    → xorshift64* seeded PRNG
 easing.h        → Shared easing utilities
+achievements.c  → 20 persistent achievements, save/load, popup notifications
 ```
 
 ### State Machine

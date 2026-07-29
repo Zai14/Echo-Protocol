@@ -39,7 +39,8 @@ EchoProtocol/
 │   ├── collision.h          ← circle-circle, circle-rect primitives
 │   ├── procedural.h         ← xorshift64* seeded PRNG
 │   ├── easing.h             ← shared easing utilities
-│   └── audio.h              ← procedural ambient audio system (all sounds synthesised)
+│   ├── audio.h              ← procedural ambient audio system (all sounds synthesised)
+│   └── achievements.h       ← 20 persistent achievements, save/load, popup + menu rendering
 │
 └── src/                      ← 12 source files
     ├── main.c               ← entry point, game loop, fullscreen toggle
@@ -53,7 +54,8 @@ EchoProtocol/
     ├── map.c                ← room placement, L-corridor connection, wall collision query
     ├── collision.c          ← circle-circle, circle-rect
     ├── procedural.c         ← xorshift64* RNG
-    └── audio.c              ← wave synthesis for hum, static, footsteps, heartbeat, etc.
+    ├── audio.c              ← wave synthesis for hum, static, footsteps, heartbeat, etc.
+    └── achievements.c       ← 20 persistent achievements, save/load, popup and menu rendering
 ```
 
 ---

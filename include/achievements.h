@@ -11,6 +11,7 @@
 #define ECHO_ACHIEVEMENTS_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "raylib.h"
 
 /* ------------------------------------------------------------------ */

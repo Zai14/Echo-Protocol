@@ -18,6 +18,7 @@
 #include "achievements.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
@@ -130,6 +131,7 @@ void AchievementInit(AchievementSystem *as)
 
 bool AchievementUnlock(AchievementSystem *as, AchievementId id, float gameTime)
 {
+    (void)gameTime; /* reserved for future use (e.g. elapsed time tracking) */
     if (as == NULL || id >= ACH_COUNT) return false;
 
     uint32_t bit = (uint32_t)(1u << (int)id);
