@@ -655,6 +655,25 @@ void GameUpdate(Game *game)
 
     /* If achievements menu is open, freeze all gameplay updates. */
     if (game->achievements.showMenu) {
+        /* X to reset all achievements (two-step confirmation). */
+        if (IsKeyPressed(KEY_X)) {
+            if (game->achievements.resetConfirm) {
+                AchievementReset(&game->achievements);
+                game->achievements.resetConfirm = false;
+                game->achievements.resetConfirmTimer = 0.0f;
+            } else if (game->achievements.totalUnlocked > 0) {
+                game->achievements.resetConfirm = true;
+                game->achievements.resetConfirmTimer = 3.0f;
+            }
+        }
+        /* Confirmation auto-cancel after 3s. */
+        if (game->achievements.resetConfirm) {
+            game->achievements.resetConfirmTimer -= game->deltaTime;
+            if (game->achievements.resetConfirmTimer <= 0.0f) {
+                game->achievements.resetConfirm = false;
+                game->achievements.resetConfirmTimer = 0.0f;
+            }
+        }
         return;
     }
 

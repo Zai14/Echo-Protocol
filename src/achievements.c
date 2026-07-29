@@ -157,6 +157,22 @@ bool AchievementUnlock(AchievementSystem *as, AchievementId id, float gameTime)
     return true;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Reset                                                             */
+/* ------------------------------------------------------------------ */
+
+void AchievementReset(AchievementSystem *as)
+{
+    if (as == NULL) return;
+    as->unlockedMask        = 0;
+    as->totalUnlocked       = 0;
+    as->lifetimeDeaths      = 0;
+    as->lifetimeAttempts    = 0;
+    as->lifetimeEscapes     = 0;
+    as->firstDeathNotified  = 0;
+    AchievementSave(as);
+}
+
 bool AchievementIsUnlocked(const AchievementSystem *as, AchievementId id)
 {
     if (as == NULL || id >= ACH_COUNT) return false;
@@ -212,6 +228,8 @@ void AchievementToggleMenu(AchievementSystem *as)
     if (as == NULL) return;
     as->showMenu = !as->showMenu;
     as->menuScroll = 0.0f;
+    as->resetConfirm = false;
+    as->resetConfirmTimer = 0.0f;
 }
 
 /* ------------------------------------------------------------------ */
@@ -316,10 +334,25 @@ void AchievementDrawMenu(const AchievementSystem *as)
     }
 
     /* --- Hint text at bottom --- */
-    const char *hint = "Press TAB to close";
-    int hintW = MeasureText(hint, 14);
-    DrawText(hint, (sw - hintW) / 2, panelY + panelH - 24, 14,
+    const char *hintClose = "Press TAB to close";
+    int hintCloseW = MeasureText(hintClose, 14);
+    DrawText(hintClose, (sw - hintCloseW) / 2, panelY + panelH - 24, 14,
              (Color){ 120, 120, 140, 180 });
+
+    /* Reset hint — show only if there's something to reset. */
+    if (as->totalUnlocked > 0) {
+        if (as->resetConfirm) {
+            const char *hintReset2 = "Press X again to confirm";
+            int hintReset2W = MeasureText(hintReset2, 12);
+            DrawText(hintReset2, (sw - hintReset2W) / 2, panelY + panelH - 10, 12,
+                     (Color){ 200, 80, 80, 200 });
+        } else {
+            const char *hintReset = "Press X to reset all progress";
+            int hintResetW = MeasureText(hintReset, 12);
+            DrawText(hintReset, (sw - hintResetW) / 2, panelY + panelH - 10, 12,
+                     (Color){ 100, 80, 80, 160 });
+        }
+    }
 }
 
 void AchievementDrawPopup(const AchievementSystem *as)

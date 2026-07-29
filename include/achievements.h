@@ -77,6 +77,8 @@ typedef struct AchievementSystem {
     char     savePath[260];          /* path to save file */
     bool     showMenu;               /* true when achievements menu is open */
     float    menuScroll;             /* scroll offset for menu list */
+    bool     resetConfirm;           /* true after first X press, waiting for confirmation */
+    float    resetConfirmTimer;      /* countdown before confirmation expires */
 } AchievementSystem;
 
 /* ------------------------------------------------------------------ */
@@ -113,5 +115,8 @@ bool AchievementIsUnlocked(const AchievementSystem *as, AchievementId id);
 
 /* Returns a pointer to the static definition table. */
 const AchievementDef *AchievementGetDef(AchievementId id);
+
+/* Reset all achievements and lifetime stats to zero, then save. */
+void AchievementReset(AchievementSystem *as);
 
 #endif /* ECHO_ACHIEVEMENTS_H */
