@@ -639,6 +639,11 @@ void GameUpdate(Game *game)
             game->deathFlashTimer -= game->deltaTime;
             if (game->deathFlashTimer < 0.0f) game->deathFlashTimer = 0.0f;
         }
+        /* #25: Final Black Screen — countdown, then fade to reveal stats. */
+        if (game->finalBlackTimer > 0.0f) {
+            game->finalBlackTimer -= game->deltaTime;
+            if (game->finalBlackTimer < 0.0f) game->finalBlackTimer = 0.0f;
+        }
         /* R to restart (instant, with fade transition). */
         if (IsKeyPressed(KEY_R)) {
             GameRestart(game);
