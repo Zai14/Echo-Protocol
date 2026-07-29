@@ -203,6 +203,125 @@ void AchievementUpdatePopup(AchievementSystem *as, float deltaTime)
     }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Toggle menu                                                       */
+/* ------------------------------------------------------------------ */
+
+void AchievementToggleMenu(AchievementSystem *as)
+{
+    if (as == NULL) return;
+    as->showMenu = !as->showMenu;
+    as->menuScroll = 0.0f;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Full achievements menu overlay                                    */
+/* ------------------------------------------------------------------ */
+
+void AchievementDrawMenu(const AchievementSystem *as)
+{
+    if (as == NULL || !as->showMenu) return;
+
+    int sw = GetScreenWidth();
+    int sh = GetScreenHeight();
+
+    /* --- Dark backdrop --- */
+    DrawRectangle(0, 0, sw, sh, Fade(BLACK, 0.82f));
+
+    /* --- Outer panel border with subtle glow --- */
+    int panelX = 80;
+    int panelY = 50;
+    int panelW = sw - 160;
+    int panelH = sh - 100;
+
+    /* Outer glow. */
+    DrawRectangle(panelX - 2, panelY - 2, panelW + 4, panelH + 4,
+                  Fade((Color){ 200, 170, 60, 255 }, 0.3f));
+    /* Dark panel background. */
+    DrawRectangle(panelX, panelY, panelW, panelH,
+                  (Color){ 8, 8, 16, 240 });
+    /* Thin top accent line. */
+    DrawRectangle(panelX, panelY, panelW, 2,
+                  Fade((Color){ 255, 220, 100, 255 }, 0.5f));
+
+    /* --- Title --- */
+    int titleY = panelY + 16;
+    const char *title = "ACHIEVEMENTS";
+    int titleW = MeasureText(title, 24);
+    DrawText(title, (sw - titleW) / 2, titleY, 24,
+             (Color){ 255, 215, 50, 255 });
+
+    /* Counter: X / 20 */
+    char counterStr[24];
+    snprintf(counterStr, sizeof(counterStr), "%d / %d", as->totalUnlocked, ACH_COUNT);
+    int counterW = MeasureText(counterStr, 14);
+    DrawText(counterStr, (sw - counterW) / 2, titleY + 30, 14,
+             (Color){ 180, 180, 200, 200 });
+
+    /* Progress bar. */
+    int barX = sw / 2 - 100;
+    int barY = titleY + 52;
+    int barW = 200;
+    int barH = 6;
+    DrawRectangle(barX, barY, barW, barH, (Color){ 40, 40, 50, 255 });
+    float progress = (float)as->totalUnlocked / (float)ACH_COUNT;
+    if (progress > 0.0f) {
+        DrawRectangle(barX, barY, (int)(barW * progress), barH,
+                      (Color){ 255, 215, 50, 220 });
+    }
+
+    /* --- Achievement list in two columns --- */
+    int col1X = panelX + 24;
+    int col2X = panelX + panelW / 2 + 12;
+    int rowY0 = barY + 24;
+    int rowH  = 36;  /* height per achievement row */
+    int maxVisibleRows = (panelY + panelH - rowY0 - 16) / rowH;
+    int splitIdx = maxVisibleRows;  /* achievements above this index go in col 0, rest in col 1 */
+
+    for (int i = 0; i < ACH_COUNT; i++) {
+        const AchievementDef *def = AchievementGetDef((AchievementId)i);
+        bool unlocked = AchievementIsUnlocked(as, (AchievementId)i);
+
+        int col = (i < splitIdx) ? 0 : 1;
+        int row = (i < splitIdx) ? i : (i - splitIdx);
+
+        int rx = (col == 0) ? col1X : col2X;
+        int ry = rowY0 + row * rowH;
+
+        /* Clamp to panel bounds. */
+        if (ry + rowH > panelY + panelH - 8) continue;
+
+        /* Unlocked colour scheme. */
+        Color iconColor;
+        Color titleColor;
+        Color descColor;
+
+        if (unlocked) {
+            iconColor  = (Color){ 255, 215, 50, 255 };  /* gold */
+            titleColor = (Color){ 255, 235, 180, 255 };
+            descColor  = (Color){ 180, 180, 200, 220 };
+        } else {
+            iconColor  = (Color){ 60, 60, 70, 255 };    /* dimmed */
+            titleColor = (Color){ 100, 100, 110, 255 };
+            descColor  = (Color){ 70, 70, 80, 200 };
+        }
+
+        /* Icon: ★ for unlocked, ☆ for locked. */
+        DrawText(unlocked ? "★" : "☆", rx, ry + 4, 16, iconColor);
+
+        /* Title + description. */
+        int tx = rx + 24;
+        DrawText(def->title, tx, ry + 2, 13, titleColor);
+        DrawText(def->description, tx, ry + 18, 10, descColor);
+    }
+
+    /* --- Hint text at bottom --- */
+    const char *hint = "Press TAB to close";
+    int hintW = MeasureText(hint, 14);
+    DrawText(hint, (sw - hintW) / 2, panelY + panelH - 24, 14,
+             (Color){ 120, 120, 140, 180 });
+}
+
 void AchievementDrawPopup(const AchievementSystem *as)
 {
     if (as == NULL) return;

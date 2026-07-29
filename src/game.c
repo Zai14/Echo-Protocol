@@ -634,8 +634,27 @@ void GameUpdate(Game *game)
     if (game == NULL || !game->isRunning) return;
 
     if (IsKeyPressed(KEY_ESCAPE)) {
-        game->isRunning = false;
-        game->state     = GAME_STATE_EXIT;
+        /* If achievements menu is open, close it first. */
+        if (game->achievements.showMenu) {
+            AchievementToggleMenu(&game->achievements);
+        } else {
+            game->isRunning = false;
+            game->state     = GAME_STATE_EXIT;
+        }
+        return;
+    }
+
+    /* TAB toggles the achievements menu (only during gameplay or game-over). */
+    if (IsKeyPressed(KEY_TAB) &&
+        (game->state == GAME_STATE_PLAYING ||
+         game->state == GAME_STATE_GAME_OVER ||
+         game->state == GAME_STATE_WON)) {
+        AchievementToggleMenu(&game->achievements);
+        return;
+    }
+
+    /* If achievements menu is open, freeze all gameplay updates. */
+    if (game->achievements.showMenu) {
         return;
     }
 
@@ -3188,6 +3207,11 @@ void GameDraw(Game *game)
         float powerDark = fminf(game->flickerDuration / 2.0f, 1.0f) * 0.55f;
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Fade(BLACK, powerDark));
+    }
+
+    /* --- Achievement menu overlay --- */
+    if (game->achievements.showMenu) {
+        AchievementDrawMenu(&game->achievements);
     }
 
     /* --- Achievement popup notification --- */

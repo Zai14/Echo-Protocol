@@ -75,6 +75,8 @@ typedef struct AchievementSystem {
     int      firstDeathNotified;     /* flag: has first death been detected */
     AchievementPopup popup;          /* current popup notification */
     char     savePath[260];          /* path to save file */
+    bool     showMenu;               /* true when achievements menu is open */
+    float    menuScroll;             /* scroll offset for menu list */
 } AchievementSystem;
 
 /* ------------------------------------------------------------------ */
@@ -97,6 +99,14 @@ void AchievementUpdatePopup(AchievementSystem *as, float deltaTime);
 /* Draw the achievement popup banner (if active). Call once per frame
  * from GameDraw after the main HUD layer. */
 void AchievementDrawPopup(const AchievementSystem *as);
+
+/* Draw the full achievements menu overlay. Should cover the entire
+ * screen with a dark backdrop and show all achievements in a grid.
+ * Call from GameDraw when showMenu is true. */
+void AchievementDrawMenu(const AchievementSystem *as);
+
+/* Toggle the achievements menu open/closed. */
+void AchievementToggleMenu(AchievementSystem *as);
 
 /* Returns true if the given achievement has been unlocked. */
 bool AchievementIsUnlocked(const AchievementSystem *as, AchievementId id);
