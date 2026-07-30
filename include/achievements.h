@@ -39,7 +39,8 @@ typedef enum AchievementId {
     ACH_MASOCHIST      = 17,  /* "Unbroken" — die 10 total times */
     ACH_ESCAPED        = 18,  /* "Last Light" — successfully escape */
     ACH_FACILITY_VET   = 19,  /* "Veteran Operator" — 3 total attempts */
-    ACH_COUNT          = 20   /* total number of achievements */
+    ACH_PHANTOM        = 20,  /* "Memory Leak" — encounter the Phantom */
+    ACH_COUNT          = 21   /* total number of achievements */
 } AchievementId;
 
 /* ------------------------------------------------------------------ */

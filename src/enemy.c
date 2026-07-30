@@ -101,13 +101,23 @@ void EnemyManagerAdd(EnemyManager *manager, EnemyType type, float x, float y)
         e->patrolX[2] = x + 150.0f;  e->patrolY[2] = y + 150.0f;
         e->patrolX[3] = x - 150.0f;  e->patrolY[3] = y + 150.0f;
     }
-    else
+    else if (type == ENEMY_TYPE_HUNTER)
     {
         /* Hunter starts still and dim. */
         e->state       = ENEMY_STATE_IDLE;
         e->speed       = ENEMY_HUNTER_SPEED;
         e->radius      = ENEMY_HUNTER_RADIUS;
         e->patrolCount = 0;
+    }
+    else if (type == ENEMY_TYPE_PHANTOM)
+    {
+        /* Phantom starts wandering toward a random room centre. */
+        e->state       = ENEMY_STATE_PHANTOM_WANDER;
+        e->speed       = ENEMY_PHANTOM_SPEED;
+        e->radius      = ENEMY_PHANTOM_RADIUS;
+        e->patrolCount = 0;
+        e->phantomTargetRoom = -1;
+        e->phantomPrevRoom   = -1;
     }
 }
 
@@ -158,8 +168,10 @@ void EnemyManagerUpdate(EnemyManager *manager, float deltaTime,
 
                 for (int s = 0; s < heardCount; s++)
                 {
-                    /* Watchers ignore sonar pulses — too loud, too fast. */
-                    if (heard[s].type != SOUND_EVENT_SONAR_PULSE)
+                    /* Watchers ignore sonar pulses — too loud, too fast.
+                     * They also ignore phantom whispers — that's between you and the station. */
+                    if (heard[s].type != SOUND_EVENT_SONAR_PULSE &&
+                        heard[s].type != SOUND_EVENT_PHANTOM_WHISPER)
                     {
                         heardInteresting = true;
                         soundTargetX = heard[s].x;
@@ -306,6 +318,59 @@ void EnemyManagerUpdate(EnemyManager *manager, float deltaTime,
                                     float py = e->patrolY[e->currentPatrolIdx];
                                     e->facingAngle = atan2f(py - e->y, px - e->x);
                                 }
+                            }
+                        }
+                        break;
+                    }
+
+                    default: break;
+                }
+                break;
+            }
+
+            /* ==============================================================
+             *  PHANTOM — slow wander between rooms, corrupting echo memory
+             * ============================================================ */
+            case ENEMY_TYPE_PHANTOM:
+            {
+                switch (e->state)
+                {
+                    case ENEMY_STATE_PHANTOM_WANDER:
+                    {
+                        /* Move toward the current room target. */
+                        MoveToward(e, e->targetX, e->targetY, deltaTime);
+
+                        /* Arrived — pause and drift. */
+                        if (DistSq(e->x, e->y, e->targetX, e->targetY) < 400.0f)
+                        {
+                            e->state      = ENEMY_STATE_PHANTOM_PAUSE;
+                            e->stateTimer = RandRange(ENEMY_PHANTOM_PAUSE_MIN,
+                                                      ENEMY_PHANTOM_PAUSE_MAX);
+                        }
+                        break;
+                    }
+
+                    case ENEMY_STATE_PHANTOM_PAUSE:
+                    {
+                        /* Subtle bobbing while paused — the phantom seems to drift. */
+                        e->facingAngle += deltaTime * 0.3f;
+
+                        /* Pause expired — pick a new room to wander to. */
+                        if (e->stateTimer <= 0.0f)
+                        {
+                            e->phantomPrevRoom = e->phantomTargetRoom;
+                            /* Pick a random room different from the previous one. */
+                            if (st != NULL && st->roomCount > 2)
+                            {
+                                int ri;
+                                do {
+                                    ri = GetRandomValue(0, st->roomCount - 1);
+                                } while (ri == e->phantomPrevRoom && st->roomCount > 2);
+
+                                e->phantomTargetRoom  = ri;
+                                e->targetX = st->rooms[ri].x + st->rooms[ri].w * 0.5f;
+                                e->targetY = st->rooms[ri].y + st->rooms[ri].h * 0.5f;
+                                e->state   = ENEMY_STATE_PHANTOM_WANDER;
                             }
                         }
                         break;
@@ -529,6 +594,11 @@ void EnemyManagerDraw(const EnemyManager *manager)
         const Enemy *e = &manager->enemies[i];
         if (!e->alive) continue;
 
+        /* Phantoms are NEVER drawn directly — they only appear through
+         * echo memory corruption and as a faint silhouette in the
+         * echo memory overlay pass. */
+        if (e->type == ENEMY_TYPE_PHANTOM) continue;
+
         Color baseColor;
         Color coreColor;
 
@@ -649,6 +719,20 @@ CircleShape EnemyGetCollider(const Enemy *enemy)
 /* ------------------------------------------------------------------ */
 /*  Shutdown                                                          */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/*  Get phantom (returns NULL if no phantom exists)                   */
+/* ------------------------------------------------------------------ */
+
+const Enemy *EnemyManagerGetPhantom(const EnemyManager *manager)
+{
+    if (manager == NULL) return NULL;
+    for (int i = 0; i < manager->count; i++) {
+        if (manager->enemies[i].type == ENEMY_TYPE_PHANTOM && manager->enemies[i].alive)
+            return &manager->enemies[i];
+    }
+    return NULL;
+}
 
 void EnemyManagerShutdown(EnemyManager *manager)
 {

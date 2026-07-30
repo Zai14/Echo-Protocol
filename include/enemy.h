@@ -6,7 +6,8 @@
 #include "soundprop.h"
 
 /*
- * Enemy module — two enemy types with improved behavioural AI.
+ * Enemy module — two enemy types with improved behavioural AI, plus
+ * the Phantom (atmospheric-only, revealed via echo memory corruption).
  *
  * WATCHER:
  *   Patrols waypoints with natural pauses at each stop. Investigates
@@ -20,6 +21,11 @@
  *   "charges up", then aggressively RUSHES toward the pulse origin at
  *   high speed (150 px/s). Returns to idle after the rush subsides.
  *   Fast, long hearing range (450 px).
+ *
+ * PHANTOM:
+ *   Rare enemy (~30% per run) that is NEVER drawn directly. It slowly
+ *   wanders through rooms corrupting echo memory cells to purple.
+ *   Cannot kill the player — pure psychological horror.
  *
  * GAME OVER on collision with the player (checked in game.c).
  */
@@ -45,6 +51,12 @@
 #define ENEMY_HUNTER_HEARING_RADIUS  450.0f
 #define ENEMY_HUNTER_ALERT_TIME       0.6f   /* pause before rushing */
 
+/* Phantom */
+#define ENEMY_PHANTOM_RADIUS           10.0f  /* visual-only, no collision */
+#define ENEMY_PHANTOM_SPEED            35.0f  /* slow drifter */
+#define ENEMY_PHANTOM_PAUSE_MIN        3.0f   /* lingers at each room */
+#define ENEMY_PHANTOM_PAUSE_MAX        7.0f
+
 /* ------------------------------------------------------------------ */
 /*  Types & state machine                                              */
 /* ------------------------------------------------------------------ */
@@ -52,7 +64,8 @@
 typedef enum EnemyType {
     ENEMY_TYPE_NONE = 0,
     ENEMY_TYPE_WATCHER,
-    ENEMY_TYPE_HUNTER
+    ENEMY_TYPE_HUNTER,
+    ENEMY_TYPE_PHANTOM               /* never drawn directly, only corrupts echo memory */
 } EnemyType;
 
 typedef enum EnemyAIState {
@@ -69,7 +82,11 @@ typedef enum EnemyAIState {
     ENEMY_STATE_ALERT,              /* heard a pulse — charging up */
     ENEMY_STATE_RUSH,               /* sprinting toward the player */
     ENEMY_STATE_HESITATE,           /* #8: paused at ping location, looking around */
-    ENEMY_STATE_RETREAT             /* moving to a random room after losing the player */
+    ENEMY_STATE_RETREAT,            /* moving to a random room after losing the player */
+
+    /* Phantom */
+    ENEMY_STATE_PHANTOM_WANDER,     /* moving toward a room centre */
+    ENEMY_STATE_PHANTOM_PAUSE       /* paused at room centre, drifting */
 } EnemyAIState;
 
 /* ------------------------------------------------------------------ */
@@ -102,6 +119,10 @@ typedef struct Enemy {
      * it loses the player, instead of idling in place. */
     float         retreatX;
     float         retreatY;
+
+    /* Phantom: current target room index for wandering. */
+    int           phantomTargetRoom;
+    int           phantomPrevRoom;
 } Enemy;
 
 typedef struct EnemyManager {
@@ -136,12 +157,15 @@ void EnemyManagerUpdate(EnemyManager *manager, float deltaTime,
                         float hunterAlertMultiplier,
                         float predictedPingX, float predictedPingY);
 
-/* Draw every alive enemy. */
+/* Draw every alive enemy EXCEPT phantoms (they are drawn via echo memory). */
 void EnemyManagerDraw(const EnemyManager *manager);
 
 /* Get the collision shape for a specific enemy (for game-over
- * detection in game.c). */
+ * detection in game.c).  Returns zero-radius shape for phantoms. */
 CircleShape EnemyGetCollider(const Enemy *enemy);
+
+/* Get the phantom enemy from the manager (returns NULL if no phantom). */
+const Enemy *EnemyManagerGetPhantom(const EnemyManager *manager);
 
 void EnemyManagerShutdown(EnemyManager *manager);
 

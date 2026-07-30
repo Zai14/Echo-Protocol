@@ -54,6 +54,7 @@ static const AchievementDef ACH_DEF_TABLE[ACH_COUNT] = {
     { ACH_MASOCHIST,      "Unbroken",            "Die 10 times across all attempts" },
     { ACH_ESCAPED,        "Last Light",          "Successfully escape through the airlock" },
     { ACH_FACILITY_VET,   "Veteran Operator",    "Complete 3 total escape attempts" },
+    { ACH_PHANTOM,        "Memory Leak",         "Encounter the Phantom in the station" },
 };
 
 /* ------------------------------------------------------------------ */

@@ -18,8 +18,12 @@
  * After the wireframe fades, the cell is pruned so it never
  * draws again.
  *
+ * CORRUPTION: The Phantom enemy can mark cells as corrupted,
+ * causing them to render purple/magenta with static noise
+ * instead of the normal blue wireframe.
+ *
  * Controls: none — driven automatically by SonarPulse expansion
- * in game.c.
+ * in game.c.  Corruption is triggered by PhantomUpdate in game.c.
  */
 
 #include <stdbool.h>
@@ -45,6 +49,7 @@ typedef struct EchoMemoryCell {
     int   cellY;          /* world-space grid row    (worldY / CELL_SIZE) */
     float revealTime;     /* game elapsedTime when first revealed by sonar */
     bool  active;
+    bool  corrupted;      /* true if the Phantom has passed through this cell */
 } EchoMemoryCell;
 
 typedef struct EchoMemory {
@@ -65,9 +70,14 @@ void EchoMemoryReveal(EchoMemory *memory, float worldX, float worldY, float game
 
 /* Fill *outColor with the interpolated colour for a cell of the
  * given age.  Alpha is set according to the transition/fade phase.
+ * If the cell is corrupted, colours shift to purple/magenta.
  * Returns the alpha value (0..1) for convenience. */
-float EchoMemoryGetCellColor(float age, Color *outColor);
+float EchoMemoryGetCellColor(float age, bool corrupted, Color *outColor);
 
+/* Mark the grid cell at (worldX, worldY) as corrupted, causing it
+ * to render with a purple/static overlay instead of blue.
+ * Returns true if a cell was found and corrupted. */
+bool EchoMemoryCorrupt(EchoMemory *memory, float worldX, float worldY);
 
 /* Remove cells whose lifetime has expired and compact the list.
  * Call this once per frame after EchoMemoryDraw. */

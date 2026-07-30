@@ -286,7 +286,15 @@ typedef struct Game {
     bool  runHadLoreTerminal;    /* true if lore log was displayed */
     bool  runHadFalseRelay;      /* true if false relay signal appeared */
     bool  runHadHunterMimic;     /* true if hunter mimic ping occurred */
+    bool  runHadPhantom;         /* true if phantom was encountered this run */
     bool  runEscapeAchieved;     /* true if player successfully escaped */
+
+    /* Phantom enemy: spawned flag, whisper timer, corruption timer. */
+    bool  phantomSpawned;        /* true if a phantom exists this run */
+    float phantomWhisperTimer;   /* countdown to next phantom whisper sound */
+    float phantomCorruptTimer;   /* how long since last corruption tick */
+    float phantomShowTimer;      /* display timer for phantom encounter text */
+    bool  phantomSeen;           /* true if player has seen corrupted echo memory */
 } Game;
 
 void GameInit(Game *game);

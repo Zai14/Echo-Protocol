@@ -368,7 +368,24 @@ void GameInit(Game *game)
     game->runHadLoreTerminal   = false;
     game->runHadFalseRelay     = false;
     game->runHadHunterMimic    = false;
+    game->runHadPhantom        = false;
     game->runEscapeAchieved    = false;
+
+    /* --- Phantom: 30% chance to spawn the rare ghost enemy --- */
+    game->phantomSpawned = false;
+    game->phantomWhisperTimer = 12.0f;
+    game->phantomCorruptTimer = 0.0f;
+    game->phantomShowTimer    = 0.0f;
+    game->phantomSeen         = false;
+    if (GetRandomValue(0, 99) < 30 && game->station.roomCount > 2) {
+        game->phantomSpawned = true;
+        /* Place phantom in a room far from start. */
+        int farIdx = game->station.objectiveRoomIdx;
+        if (farIdx < 0) farIdx = game->station.roomCount - 1;
+        float phx, phy;
+        StationRoomCentre(&game->station, farIdx, &phx, &phy);
+        EnemyManagerAdd(&game->enemies, ENEMY_TYPE_PHANTOM, phx, phy);
+    }
 
     /* Stay in GAME_STATE_BOOT for the title screen. */
     /* Transitions to PLAYING after titleTimer expires. */
@@ -617,7 +634,24 @@ void GameRestart(Game *game)
     game->runHadLoreTerminal   = false;
     game->runHadFalseRelay     = false;
     game->runHadHunterMimic    = false;
+    game->runHadPhantom        = false;
     game->runEscapeAchieved    = false;
+
+    /* --- Phantom: 30% chance to spawn the rare ghost enemy --- */
+    game->phantomSpawned = false;
+    game->phantomWhisperTimer = 12.0f;
+    game->phantomCorruptTimer = 0.0f;
+    game->phantomShowTimer    = 0.0f;
+    game->phantomSeen         = false;
+    if (GetRandomValue(0, 99) < 30 && game->station.roomCount > 2) {
+        game->phantomSpawned = true;
+        /* Place phantom in a room far from start. */
+        int farIdx = game->station.objectiveRoomIdx;
+        if (farIdx < 0) farIdx = game->station.roomCount - 1;
+        float phx, phy;
+        StationRoomCentre(&game->station, farIdx, &phx, &phy);
+        EnemyManagerAdd(&game->enemies, ENEMY_TYPE_PHANTOM, phx, phy);
+    }
 
     /* Track total attempts for FACILITY VETERAN achievement. */
     game->achievements.lifetimeAttempts++;
@@ -1189,7 +1223,57 @@ void GameUpdate(Game *game)
         }
     }
 
-    /* --- #13: Reactor Pulse — global brightness modulation for atmosphere. --- */
+        /* --- Phantom: movement, echo corruption, whispers --- */
+    if (game->phantomSpawned && game->state == GAME_STATE_PLAYING)
+    {
+        /* Corrupt echo memory cells near the phantom every 0.3s. */
+        game->phantomCorruptTimer -= game->deltaTime;
+        if (game->phantomCorruptTimer <= 0.0f) {
+            game->phantomCorruptTimer = 0.3f;
+            const Enemy *ph = EnemyManagerGetPhantom(&game->enemies);
+            if (ph != NULL) {
+                /* Corrupt cells in a small radius around the phantom. */
+                float step = (float)ECHO_MEMORY_CELL_SIZE * 0.5f;
+                for (float dx = -step; dx <= step; dx += step) {
+                    for (float dy = -step; dy <= step; dy += step) {
+                        EchoMemoryCorrupt(&game->memory, ph->x + dx, ph->y + dy);
+                    }
+                }
+                /* Achievement: check if any corrupted cells exist */
+                if (!game->runHadPhantom) {
+                    for (int mi = 0; mi < game->memory.count; mi++) {
+                        if (game->memory.cells[mi].corrupted) {
+                            game->runHadPhantom = true;
+                            AchievementUnlock(&game->achievements, ACH_PHANTOM, game->elapsedTime);
+                            game->phantomShowTimer = 4.0f;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        /* Phantom whisper sound events — faint, sporadic. */
+        game->phantomWhisperTimer -= game->deltaTime;
+        if (game->phantomWhisperTimer <= 0.0f) {
+            game->phantomWhisperTimer = 8.0f + (float)GetRandomValue(0, 60) / 10.0f;
+            const Enemy *ph = EnemyManagerGetPhantom(&game->enemies);
+            if (ph != NULL && game->firstPingDone) {
+                SoundPropEmit(&game->soundProp, SOUND_EVENT_PHANTOM_WHISPER,
+                              ph->x, ph->y,
+                              SOUND_PHANTOM_RADIUS, SOUND_PHANTOM_INTENSITY,
+                              SOUND_PHANTOM_LIFETIME);
+            }
+        }
+
+        /* Phantom encounter text timer. */
+        if (game->phantomShowTimer > 0.0f) {
+            game->phantomShowTimer -= game->deltaTime;
+            if (game->phantomShowTimer <= 0.0f) game->phantomShowTimer = 0.0f;
+        }
+    }
+
+/* --- #13: Reactor Pulse — global brightness modulation for atmosphere. --- */
     {
         if (game->state == GAME_STATE_PLAYING) {
             game->reactorPulseTimer -= game->deltaTime;
@@ -1527,6 +1611,8 @@ void GameUpdate(Game *game)
         game->nearestEnemyDist = 99999.0f;
         for (int i = 0; i < game->enemies.count; i++) {
             if (!game->enemies.enemies[i].alive) continue;
+            /* Phantoms don't trigger heartbeat — they can't hurt you. */
+            if (game->enemies.enemies[i].type == ENEMY_TYPE_PHANTOM) continue;
             float dx = game->enemies.enemies[i].x - game->player.position.x;
             float dy = game->enemies.enemies[i].y - game->player.position.y;
             float d = sqrtf(dx * dx + dy * dy);
@@ -2593,7 +2679,7 @@ void GameDraw(Game *game)
             if (!cell->active) continue;
             float age = game->elapsedTime - cell->revealTime;
             Color color;
-            float alpha = EchoMemoryGetCellColor(age, &color);
+            float alpha = EchoMemoryGetCellColor(age, cell->corrupted, &color);
             if (alpha <= 0.0f) continue;
 
             float wx = (float)(cell->cellX) * cellSize;
@@ -2614,6 +2700,42 @@ void GameDraw(Game *game)
             DrawLineEx(br, bl, 1.5f, color);
             DrawLineEx(bl, tl, 1.5f, color);
         }
+
+        /* --- Phantom silhouette: faint purple figure in echo memory --- */
+        if (game->phantomSpawned) {
+            const Enemy *ph = EnemyManagerGetPhantom(&game->enemies);
+            if (ph != NULL) {
+                Vector2 phScreen = GetWorldToScreen2D((Vector2){ ph->x, ph->y }, game->camera);
+                /* Check if phantom is within screen bounds. */
+                if (phScreen.x > -100 && phScreen.x < ECHO_WINDOW_WIDTH + 100 &&
+                    phScreen.y > -100 && phScreen.y < ECHO_WINDOW_HEIGHT + 100) {
+                    /* Only draw if there's echo memory nearby (phantom has passed through). */
+                    int pcx = (int)floorf(ph->x / cellSize);
+                    int pcy = (int)floorf(ph->y / cellSize);
+                    bool nearbyMemory = false;
+                    for (int mi = 0; mi < game->memory.count && !nearbyMemory; mi++) {
+                        int dx = (int)abs(game->memory.cells[mi].cellX - pcx);
+                        int dy = (int)abs(game->memory.cells[mi].cellY - pcy);
+                        if (dx <= 1 && dy <= 1 && game->memory.cells[mi].active) {
+                            nearbyMemory = true;
+                        }
+                    }
+                    if (nearbyMemory) {
+                        float phPulse = sinf(game->elapsedTime * 2.5f) * 0.15f + 0.4f;
+                        Color phColor = (Color){ 180, 60, 200, (unsigned char)(phPulse * 80.0f) };
+                        DrawCircleV(phScreen, 10.0f, phColor);
+                        /* Faint cross-shape to suggest a figure. */
+                        DrawLineEx(phScreen, (Vector2){ phScreen.x, phScreen.y - 16.0f }, 1.5f,
+                                   Fade(phColor, 0.3f));
+                        DrawLineEx(phScreen, (Vector2){ phScreen.x - 6.0f, phScreen.y + 10.0f }, 1.5f,
+                                   Fade(phColor, 0.3f));
+                        DrawLineEx(phScreen, (Vector2){ phScreen.x + 6.0f, phScreen.y + 10.0f }, 1.5f,
+                                   Fade(phColor, 0.3f));
+                    }
+                }
+            }
+        }
+
         EndBlendMode();
         EchoMemoryCompact(&game->memory, game->elapsedTime);
     }
@@ -3160,6 +3282,21 @@ void GameDraw(Game *game)
             int lW = MeasureText(game->logText, 13);
             DrawText(game->logText, (sw4 - lW) / 2, sh4 / 2 + 110, 13,
                      Fade((Color){ 200, 230, 255, 255 }, lA * lPulse * 0.5f));
+        }
+
+        /* --- Phantom encounter text overlay --- */
+        if (game->phantomShowTimer > 0.0f && game->runHadPhantom) {
+            int sw5 = GetScreenWidth(), sh5 = GetScreenHeight();
+            float phA = fminf(game->phantomShowTimer * 0.5f, 0.6f);
+            float phPulse = sinf(game->elapsedTime * 1.5f) * 0.15f + 0.85f;
+            const char *phText = "The memory is not your own.";
+            int phW = MeasureText(phText, 14);
+            DrawText(phText, (sw5 - phW) / 2, sh5 / 2 + 135, 14,
+                     Fade((Color){ 200, 80, 200, 255 }, phA * phPulse));
+            const char *phSub = "— Echo Anomaly —";
+            int phW2 = MeasureText(phSub, 10);
+            DrawText(phSub, (sw5 - phW2) / 2, sh5 / 2 + 155, 10,
+                     Fade((Color){ 150, 80, 150, 255 }, phA * 0.5f));
         }
 
         /* --- Panic breathing overlay --- */

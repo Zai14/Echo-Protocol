@@ -25,6 +25,7 @@ typedef enum SoundEventType {
     SOUND_EVENT_SONAR_PULSE,
     SOUND_EVENT_DOOR_CLANG,
     SOUND_EVENT_HAZARD,
+    SOUND_EVENT_PHANTOM_WHISPER,
     SOUND_EVENT_COUNT   /* sentinel, not a valid type */
 } SoundEventType;
 
@@ -47,6 +48,10 @@ typedef enum SoundEventType {
 #define SOUND_HAZARD_RADIUS      180.0f
 #define SOUND_HAZARD_INTENSITY    0.50f
 #define SOUND_HAZARD_LIFETIME     0.40f
+
+#define SOUND_PHANTOM_RADIUS     100.0f
+#define SOUND_PHANTOM_INTENSITY   0.15f
+#define SOUND_PHANTOM_LIFETIME    0.80f
 
 /* ------------------------------------------------------------------ */
 /*  Core data types                                                    */
