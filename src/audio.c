@@ -178,11 +178,37 @@ void AmbientAudioInit(AmbientAudio *ambient)
         }
     }
 
+    /* Phantom whisper — 0.5 s modulated noise with higher frequency bias
+     * to create a sibilant, breathy whisper.  The envelope uses a faster
+     * oscillation than breathing, creating a subtle "shhh" pattern. */
+    {
+        unsigned int whisperSamples = (unsigned int)((float)AUDIO_SAMPLE_RATE * 0.5f);
+        short *data = (short *)malloc(whisperSamples * sizeof(short));
+        if (data != NULL) {
+            for (unsigned int i = 0; i < whisperSamples; i++) {
+                float t = (float)i / (float)AUDIO_SAMPLE_RATE;
+                /* Quick envelope: rapid attack, slower decay — like a gasp. */
+                float attack  = fminf(t * 20.0f, 1.0f);
+                float decay   = 1.0f - fmaxf((t - 0.15f) / 0.35f, 0.0f);
+                float envelope = attack * decay;
+                /* Band-passed noise: wrap noise with a 2kHz sine to give
+                 * it a sibilant "shh" quality instead of raw static. */
+                float noise = (float)GetRandomValue(-10000, 10000) / 10000.0f;
+                float sibiliance = sinf(2.0f * 3.14159265f * 2000.0f * t) * 0.5f + 0.5f;
+                data[i] = (short)(noise * sibiliance * envelope * 6000.0f);
+            }
+            Wave w = { whisperSamples, AUDIO_SAMPLE_RATE, 16, 1, data };
+            ApplyFadeOut(&w, 0.15f);
+            ambient->phantomWhisper = MakeSound(w, 0.0f);  /* start silent */
+        }
+    }
+
     /* --- State --- */
     ambient->silenceTimer      = 3.0f;   /* 3 s of pure silence */
     ambient->mechanicalTimer   = 8.0f + (float)GetRandomValue(0, 7000) / 1000.0f;
     ambient->heartbeatCooldown = 0.0f;
     ambient->heartbeatPlaying  = false;
+    ambient->phantomWhisperCooldown = 0.0f;
     ambient->initialized       = true;
 }
 
@@ -193,7 +219,8 @@ void AmbientAudioInit(AmbientAudio *ambient)
 void AmbientAudioUpdate(AmbientAudio *ambient, float deltaTime,
                         float nearestEnemyDist, float footstepTrigger,
                         bool sonarTriggered,
-                        bool relayActivated)
+                        bool relayActivated,
+                        float phantomProximity)
 {
     if (ambient == NULL || !ambient->initialized) return;
 
@@ -288,6 +315,27 @@ void AmbientAudioUpdate(AmbientAudio *ambient, float deltaTime,
         }
     }
 
+    /* --- Phantom whisper: triggered when Phantom is nearby --- */
+    {
+        ambient->phantomWhisperCooldown -= deltaTime;
+        if (ambient->phantomWhisperCooldown < 0.0f)
+            ambient->phantomWhisperCooldown = 0.0f;
+
+        if (phantomProximity > 0.01f && ambient->phantomWhisperCooldown <= 0.0f)
+        {
+            if (!IsSoundPlaying(ambient->phantomWhisper))
+            {
+                float vol = 0.006f + phantomProximity * 0.012f;
+                SetSoundVolume(ambient->phantomWhisper, vol);
+                float pitchVar = 0.95f + (float)GetRandomValue(-5, 5) / 100.0f;
+                SetSoundPitch(ambient->phantomWhisper, pitchVar);
+                PlaySound(ambient->phantomWhisper);
+            }
+            /* Re-trigger every 1.5-3s while phantom is nearby. */
+            ambient->phantomWhisperCooldown = 1.5f + (float)GetRandomValue(0, 15) / 10.0f;
+        }
+    }
+
     /* --- Adaptive hum: electrical hum changes with danger level --- */
     {
         float humIntensity = (nearestEnemyDist < 350.0f)
@@ -339,6 +387,7 @@ void AmbientAudioShutdown(AmbientAudio *ambient)
     UnloadSound(ambient->crtBurst);
     UnloadSound(ambient->mechanicalRumble);
     UnloadSound(ambient->breathing);
+    UnloadSound(ambient->phantomWhisper);
 
     CloseAudioDevice();
     memset(ambient, 0, sizeof(*ambient));

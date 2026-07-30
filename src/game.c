@@ -377,7 +377,7 @@ void GameInit(Game *game)
     game->phantomCorruptTimer = 0.0f;
     game->phantomShowTimer    = 0.0f;
     game->phantomSeen         = false;
-    if (GetRandomValue(0, 99) < 30 && game->station.roomCount > 2) {
+    if (game->station.roomCount > 2 && (game->anomalySeed ? (GetRandomValue(0, 99) < 60) : (GetRandomValue(0, 99) < 30))) {
         game->phantomSpawned = true;
         /* Place phantom in a room far from start. */
         int farIdx = game->station.objectiveRoomIdx;
@@ -643,7 +643,7 @@ void GameRestart(Game *game)
     game->phantomCorruptTimer = 0.0f;
     game->phantomShowTimer    = 0.0f;
     game->phantomSeen         = false;
-    if (GetRandomValue(0, 99) < 30 && game->station.roomCount > 2) {
+    if (game->station.roomCount > 2 && (game->anomalySeed ? (GetRandomValue(0, 99) < 60) : (GetRandomValue(0, 99) < 30))) {
         game->phantomSpawned = true;
         /* Place phantom in a room far from start. */
         int farIdx = game->station.objectiveRoomIdx;
@@ -1619,11 +1619,26 @@ void GameUpdate(Game *game)
             if (d < game->nearestEnemyDist) game->nearestEnemyDist = d;
         }
 
+        /* Compute phantom proximity (0..1) for whisper audio. */
+        float phantomProx = 0.0f;
+        if (game->phantomSpawned) {
+            const Enemy *ph = EnemyManagerGetPhantom(&game->enemies);
+            if (ph != NULL) {
+                float pdx = ph->x - game->player.position.x;
+                float pdy = ph->y - game->player.position.y;
+                float pd = sqrtf(pdx * pdx + pdy * pdy);
+                if (pd < 300.0f) {
+                    phantomProx = 1.0f - pd / 300.0f;
+                }
+            }
+        }
+
         AmbientAudioUpdate(&game->ambient, game->deltaTime,
                            game->nearestEnemyDist,
                            footstepTriggered ? 1.0f : 0.0f,
                            spacePressed,
-                           game->relaysActivated >= 1);
+                           game->relaysActivated >= 1,
+                           phantomProx);
     }
 
     /* --- Sonar bridge to renderer (with echo distortion + sonar reflection) --- */

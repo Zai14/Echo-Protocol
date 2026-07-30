@@ -42,6 +42,10 @@ typedef struct AmbientAudio {
     /* Panic breathing — low modulated noise when Hunter is close. */
     Sound breathing;
 
+    /* Phantom whisper — modulated noise when Phantom is near. */
+    Sound phantomWhisper;
+    float phantomWhisperCooldown;
+
     /* State. */
     bool   initialized;
     float  silenceTimer;      /* 3s countdown — no audio until this expires */
@@ -62,7 +66,8 @@ void AmbientAudioInit(AmbientAudio *ambient);
 void AmbientAudioUpdate(AmbientAudio *ambient, float deltaTime,
                         float nearestEnemyDist, float footstepTrigger,
                         bool sonarTriggered,
-                        bool relayActivated);
+                        bool relayActivated,
+                        float phantomProximity);
 
 /* Shutdown: unload all generated sounds and close the audio context. */
 void AmbientAudioShutdown(AmbientAudio *ambient);
