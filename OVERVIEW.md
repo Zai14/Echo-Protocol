@@ -32,15 +32,15 @@ EchoProtocol/
 │   ├── player.h             ← WASD movement, circle collider
 │   ├── renderer.h           ← off-screen render texture, darkness shader, sonar reveal bridge
 │   ├── sonar.h              ← expanding reveal pulses (signature mechanic)
-│   ├── echomemory.h         ← fading blue wireframe memory traces
-│   ├── soundprop.h          ← sound event propagation (footsteps, sonar)
-│   ├── enemy.h              ← Watcher + Hunter AI, patrol routes, sound queries, retreat
+│   ├── echomemory.h         ← fading blue wireframe memory traces + corruption system
+│   ├── soundprop.h          ← sound event propagation (footsteps, sonar, phantom whispers)
+│   ├── enemy.h              ← Watcher + Hunter + Phantom AI, patrol routes, sound queries, retreat
 │   ├── map.h                ← procedural station generator + wall collision query
 │   ├── collision.h          ← circle-circle, circle-rect primitives
 │   ├── procedural.h         ← xorshift64* seeded PRNG
 │   ├── easing.h             ← shared easing utilities
 │   ├── audio.h              ← procedural ambient audio system (all sounds synthesised)
-│   └── achievements.h       ← 20 persistent achievements, save/load, popup + menu rendering
+│   └── achievements.h       ← 21 persistent achievements, save/load, popup + menu rendering
 │
 └── src/                      ← 12 source files
     ├── main.c               ← entry point, game loop, fullscreen toggle
@@ -48,14 +48,14 @@ EchoProtocol/
     ├── player.c             ← WASD input, movement, glow rendering
     ├── renderer.c           ← render texture, shader init/uniforms
     ├── sonar.c              ← pulse emission, expansion, decay, cooldown
-    ├── echomemory.c         ← grid-cell capture, blue wireframe fading, compaction
+    ├── echomemory.c         ← grid-cell capture, blue wireframe fading, corruption, compaction
     ├── soundprop.c          ← event emit, lifetime update, spatial query
-    ├── enemy.c              ← Watcher patrol/investigate/search, Hunter idle/alert/rush/retreat
+    ├── enemy.c              ← Watcher patrol/investigate/search, Hunter idle/alert/rush/retreat, Phantom wander
     ├── map.c                ← room placement, L-corridor connection, wall collision query
     ├── collision.c          ← circle-circle, circle-rect
     ├── procedural.c         ← xorshift64* RNG
-    ├── audio.c              ← wave synthesis for hum, static, footsteps, heartbeat, etc.
-    └── achievements.c       ← 20 persistent achievements, save/load, popup and menu rendering
+    ├── audio.c              ← wave synthesis for hum, static, footsteps, heartbeat, phantom whisper, etc.
+    └── achievements.c       ← 21 persistent achievements, save/load, popup and menu rendering
 ```
 
 ---
@@ -121,6 +121,8 @@ While running:
     Pass 3 — Screen-space overlays
     ├─ Echo memory wireframe    → blue fading grid (additive blend)
     ├─ Heartbeat ring           → pulsing red ring when enemies < 220px
+    ├─ Phantom silhouette       → faint purple figure drawn in echo memory overlay when phantom < 300px
+    ├─ Phantom encounter text   → "*The memory is not your own.*" on first corrupted cell detection
     ├─ Airlock compass          → golden pulsing dot/arrow toward escape
     ├─ Hunter proximity glow    → directional red/orange glow at screen edge
     ├─ Sonar cooldown ring      → bottom-right ring fill indicator
@@ -188,8 +190,11 @@ Room type at the pulse origin affects echo reveal strength *(all C-side, no shad
 |-------|----------|--------|
 | Full visibility | 0–0.7s | White-cyan outline (lerps to blue) |
 | Blue wireframe | 0.7–3.7s | Blue wireframe fading to transparent |
+| **Corrupted** (by Phantom) | — | **Magenta/purple** with oscillating glitch intensity, additive blend |
 | Grid cell | 64×64 px | |
 | Capacity | 1024 cells | Additive blend, screen-space overlay |
+
+*When the Phantom passes through a revealed area, affected cells turn purple — the infection spreads through your memory of the station.*
 
 ### Darkness Shader (`assets/shaders/darkness.fs`)
 | Layer | Effect |
@@ -212,9 +217,11 @@ Room type at the pulse origin affects echo reveal strength *(all C-side, no shad
 |-------|--------|-----------|----------|
 | `FOOTSTEP` | 80 px | 0.30 | 0.3 s |
 | `SONAR_PULSE` | 400 px | 1.00 | 2.0 s |
+| `PHANTOM_WHISPER` | 130 px | 0.45 | 0.6 s |
 
 Capacity: 16 events, compacted each frame.  
-Enemies query via spatial overlap: `SoundPropQuery(cx, cy, hearingRadius, ...)`.
+Enemies query via spatial overlap: `SoundPropQuery(cx, cy, hearingRadius, ...)`.  
+*Note: `PHANTOM_WHISPER` events are ignored by Watchers — the phantom's presence is purely atmospheric.*
 
 ---
 
@@ -275,6 +282,36 @@ IDLE → (hear sonar) → ALERT [0.6s charge, colour brightens]
 
 **Game Over:** `CollisionCircleCircle(enemy, player)` → slow-mo death sequence (0.6s) → `GAME_STATE_GAME_OVER`.
 
+### Phantom — The Echo Anomaly (0–1 per game, 30% chance)
+> *It exists only in what you remember. It corrupts what you have seen.*
+
+| Property | Value |
+|----------|-------|
+| Speed | 35 px/s |
+| Radius | 10 px |
+| Behaviour | Wanders the station aimlessly, moving between random rooms |
+| Visibility | **Never seen directly** — only leaves purple wireframe trails in echo memory |
+| Threat | Cannot kill the player. Corrupts revealed echo memory cells with magenta/purple noise. |
+| Spawn | 30% chance per run (60% on ANOMALY seeds — seed % 777 == 0) |
+
+**State machine:**
+```
+PHANTOM_WANDER → (arrive at room centre) → PHANTOM_PAUSE [3–7s]
+  → pick new random room → PHANTOM_WANDER
+```
+
+**Behaviour:**
+- Every 0.3s, the phantom corrupts up to 9 echo memory cells near its current position
+- Corrupted cells render as **magenta/purple** with oscillating glitch intensity
+- Every 8–14s, emits a `PHANTOM_WHISPER` sound event (inaudible to Watchers)
+- When the phantom is within 300px of the player:
+  - A **faint purple silhouette** is drawn in the echo memory overlay layer
+  - A **procedural whisper sound** plays (0.5s modulated noise with sibilance, very quiet)
+- On first detection of a corrupted cell: encounter text "*The memory is not your own.*"
+  and the **"Memory Leak"** achievement unlocks
+
+**Design purpose:** The Phantom is pure psychological horror. It can't hurt you — but it corrupts your map, distorts your view of explored areas, and whispers in the dark. Players will question what's real. The purple corruption spreading through previously safe blue wireframes creates a sense of contamination without any direct threat.
+
 > **#8 Hunter Hesitation:** When the Hunter reaches the last ping location (RUSH timer still active),
 > there is a **15% chance** it enters HESITATE instead of immediately retreating. It pauses for 0.6s,
 > slowly rotates as if scanning, then resumes the rush (`alertPulseLife + 0.5s` remaining).
@@ -334,6 +371,8 @@ Zero audio files shipped. Sample rate: 11025 Hz.
                    After relay: 43% faster (×0.70 cooldown) |
 | **Panic Breathing** | Low modulated noise, 1.5s | 0.0–0.060 | Starts when Hunter < 180px, pitch+volume
                    ramp with proximity. Creates psychological urgency. |
+| **Phantom Whisper** | Modulated noise + 2000Hz sibilance, 0.5s | 0.006–0.018 | Triggered when phantom < 300px, cooldown 1.5–3s.
+                   Very quiet breathy whisper, pitch varies ±5% per play. |
 | CRT interference | Noise burst, 0.15s | 0.050 | Triggered by sonar pulse |
 | Distant machinery | 60 Hz square, 1s | 0.025–0.055 | Random interval 8–18 seconds.
                    After relay: 2× louder (0.050–0.080), interval 6–16s |

@@ -97,6 +97,23 @@ START → Find the relay room → Activate the console → Airlock unlocks → R
 
 > **Late-game surprise — Hunter Mimics Sonar:** After relay activation, each time the player pings, the Hunter emits its **own sonar pulse** 1.8–2.2 seconds later from its current position. It briefly reveals itself — and also reveals the player. A chilling reminder that you are not alone in the dark.
 
+### Phantom — The Echo Anomaly
+> *It exists only in what you remember. It corrupts what you have seen.*
+
+| Property | Value |
+|----------|-------|
+| Speed | 35 px/s |
+| Spawn chance | 30% per run (60% on ANOMALY seeds — seed % 777 == 0) |
+| Visibility | **Never visible** — only leaves purple trails in echo memory |
+| Threat | Cannot kill you. Corrupts your map. Whispers in the dark. |
+
+| State | Behaviour |
+|-------|-----------|
+| **WANDER** | Moves aimlessly between random rooms at a slow pace |
+| **PAUSE** | Holds position for 3–7 seconds, then continues wandering |
+
+*The Phantom is pure psychological horror. It cannot hurt you — but it infects your echo memory with purple corruption, distorts previously safe areas, and breathes faint whispers when nearby. On first encounter: "The memory is not your own." — and the **"Memory Leak"** achievement unlocks.*
+
 ---
 
 ## ✨ Features
